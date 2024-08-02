@@ -109,24 +109,20 @@ def insert_json(conn,_type, jsondata):
         if cursor:
             cursor.close()
 
-def append_to_json_string(json_data, new_data):
-    # Parse the JSON string into a Python data structure
-    data = json_data
-    
-    # Check if the data is a list or dictionary
-    if isinstance(data, list):
-        # If the data is a list, append the new data
-        data.append(new_data)
-    elif isinstance(data, dict):
-        # If the data is a dictionary, update the dictionary
-        data.update(new_data)
-    else:
-        raise ValueError("JSON string must be a list or dictionary")
-    
-    # Convert the data structure back into a JSON string
-    return data
 
 def transform_to_json(name, _type, features_data):
+    """
+    Transforms the provided name, type, and features data into a structured JSON format.
+
+    Args:
+        name (str): The name to be included in the JSON structure.
+        _type (str): The type of the features (e.g., "LUM" or "CIR").
+        features_data (list): A list of feature data to be included in the JSON.
+
+    Returns:
+        dict: A dictionary representing the structured JSON data.
+    """
+
     # Define the base structure
     data = {
         "name": {
@@ -164,8 +160,54 @@ def transform_to_json(name, _type, features_data):
     return data
 
 def get_properties_except(jsondata, exclude_key):
+    """
+    Returns a new dictionary containing all key-value pairs from the input dictionary,
+    except for the specified key.
+
+    Args:
+        jsondata (dict): A dictionary containing properties to be filtered.
+        exclude_key (str): The key to be excluded from the returned dictionary.
+
+    Returns:
+        dict: A new dictionary with all key-value pairs except the excluded key.
+    """
     return {key: value for key, value in jsondata.items() if key != exclude_key}
 
+def normalize_properties(properties):
+    """
+    Normalizes specific properties in the given dictionary.
+
+    Args:
+        properties (dict): A dictionary containing properties to be normalized.
+
+    Returns:
+        dict: The updated dictionary with normalized properties.
+    """
+    properties_to_nornalice = ['salida']
+    for _property_to_normalice in properties_to_nornalice:
+        if _property_to_normalice in properties:
+            salida_value = properties[_property_to_normalice]
+            if isinstance(salida_value, float):
+                properties[_property_to_normalice] = int(salida_value)
+    return properties  # Convert to int
+
+def lowercase_json(data):
+    """
+    Recursively converts all keys and string values in a JSON-like structure to lowercase.
+
+    Args:
+        data (dict or list): The JSON data to be processed, which can be a dictionary, list, or other types.
+
+    Returns:
+        dict or list: A new JSON-like structure with all keys and string values converted to lowercase.
+    """
+    if isinstance(data, dict):
+        return {key.lower(): lowercase_json(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [lowercase_json(item) for item in data]
+    else:
+        return data
+    
 # Función para procesar archivos GeoJSON
 def store_geojson(folder_path):
     _luminaries_json = []
@@ -176,16 +218,29 @@ def store_geojson(folder_path):
             _file_path = os.path.join(folder_path, _file)
             
             with open(_file_path) as f:
-                data = json.load(f)
-                CM = data["name"][:data["name"].find('_')]
+                print(_file_path)
+                data = lowercase_json(json.load(f))
+                CM = str(data['name'])[:str(data['name']).find('_')]
+                _alternative_structure = False
+                if isinstance(data['name'], dict):
+                    CM = data['name']['value']
+                    _alternative_structure = True
+                
+                print(f"CM: {CM}")
+
                 _type = "LUM"
                 _extracted_features = []
-                for feature in data['features']:
+                _data_features = data['features']
+                if _alternative_structure:
+                    _data_features = data['features']["value"]
+
+                for feature in _data_features:
+                    _properties = get_properties_except(feature['properties'],'tipo_secci')
+                    _properties = normalize_properties(_properties)
                     _extracted_data = {'coordinates':feature['geometry']['coordinates'],
-                                        'properties': get_properties_except(feature['properties'],'tipo_secci')
+                                        'properties': _properties
                                     }
 
-                    
                     _extracted_features.append(_extracted_data)
 
                 if "lum" in _file.lower():
